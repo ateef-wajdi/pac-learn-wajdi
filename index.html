@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pac-Learn: Q-Learning Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Figtree:wght@400;600&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#000;--ink:#f4f4ff;--mute:#9aa3d6;--card:#07071c;--line:#2121ff;--teal:#ffd400;--coral:#ff3b3b;--gold:#ffb8ae;--wall:#0a0a5a;--lo:#05051a;--hi:#6b5a00;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+h1{font:400 clamp(22px,5.5vw,38px)/1.2 'Press Start 2P',monospace;color:var(--teal);margin:8px 0 12px;text-shadow:3px 3px 0 #ff3b3b}
+h2{font:400 12px/1.5 'Press Start 2P',monospace;color:var(--teal);margin:0 0 10px}
+.sub{color:var(--mute);margin:0 0 18px;max-width:56ch}
+.wrap{display:grid;gap:16px}
+@media(min-width:800px){.wrap{grid-template-columns:minmax(0,1fr) 340px;align-items:start}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+#grid{width:100%;aspect-ratio:1;display:block;border-radius:10px;cursor:pointer;touch-action:manipulation}
+.hint{color:var(--mute);font-size:14px;margin:8px 2px 0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+button{font:600 15px Figtree,sans-serif;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.main{background:var(--teal);border-color:var(--teal);color:#000}
+button.on{outline:2px solid var(--gold)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+label{display:flex;justify-content:space-between;font-size:14px;margin-top:10px}
+label b{font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--teal)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{background:var(--lo);border-radius:10px;padding:8px 4px}
+.stats b{display:block;font:400 16px 'Press Start 2P',monospace;color:var(--teal)}
+.stats span{font-size:12px;color:var(--mute)}
+#chart{width:100%;height:90px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:14px;color:var(--mute);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.learn{margin-top:16px}
+.learn ul{margin:0;padding-left:20px}
+.learn li{margin:6px 0}
+code{background:var(--lo);padding:2px 6px;border-radius:6px;font-size:14px}
+</style></head>
+<body><main>
+<h1>PAC-LEARN</h1>
+<p class="sub">Pac-Man has no map. He only gets rewards: eat the 🍒, dodge the ghosts. He learns the best route by trial and error. Press Train!</p>
+<div class="wrap">
+ <div>
+  <div class="card">
+   <canvas id="grid" aria-label="Pac-Man maze. Tap a tile to add or remove a wall."></canvas>
+   <div class="legend"><span>🍒 Cherry +1</span><span><i style="background:#ff3b3b"></i>Ghost −1</span><span><i style="background:#0a0a5a;border:2px solid #2121ff"></i>Wall</span><span><i style="background:#ffd400"></i>Brighter = higher Q</span></div>
+   <p class="hint">Tap a tile to add or remove a maze wall. This resets learning.</p>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Reward per episode (avg of 10)</h2><canvas id="chart"></canvas></div>
+ </div>
+ <div>
+  <div class="card">
+   <div class="btns">
+    <button class="main" id="run">Train</button>
+    <button id="fast">+100 episodes</button>
+    <button id="watch">Watch best path</button>
+    <button id="reset">Reset</button>
+   </div>
+   <div class="stats"><div><b id="sEp">0</b><span>episodes</span></div><div><b id="sSt">0</b><span>steps now</span></div><div><b id="sAvg">–</b><span>avg reward</span></div></div>
+   <label>Learning rate α <b id="aV">0.5</b></label><input id="alpha" type="range" min="0.05" max="1" step="0.05" value="0.5">
+   <label>Discount γ <b id="gV">0.95</b></label><input id="gamma" type="range" min="0" max="0.99" step="0.01" value="0.95">
+   <label>Exploration ε <b id="eV">0.2</b></label><input id="eps" type="range" min="0" max="1" step="0.05" value="0.2">
+   <label>Speed <b id="spV">2</b></label><input id="speed" type="range" min="1" max="40" step="1" value="2">
+  </div>
+ </div>
+</div>
+<div class="card learn">
+ <h2>Must-know</h2>
+ <ul>
+  <li><b>Agent</b> = Pac-Man. <b>Environment</b> = the maze. <b>Reward</b> = feedback (−0.04 per step, +1 for 🍒, −1 for a ghost).</li>
+  <li><b>Q(s, a)</b> = how good action <i>a</i> is in state <i>s</i>. Arrows show the best action per tile.</li>
+  <li>Update: <code>Q ← Q + α [ r + γ · max Q′ − Q ]</code></li>
+  <li><b>Exploration vs exploitation</b>: with chance ε Pac-Man tries a random move. Set ε = 0 early and it may get stuck on a bad route.</li>
+  <li><b>γ</b> near 1 = cares about long-term reward. <b>γ</b> near 0 = only cares about the next step.</li>
+ </ul>
+</div>
+</main>
+<script>
+const N=6,A=[[-1,0],[0,1],[1,0],[0,-1]],AR=['↑','→','↓','←'];
+const START=[5,0],GOAL=[0,5],PITS=[[1,4],[3,2]];
+let walls=new Set(['1,1','2,1','3,4','4,4']);
+let Q,pos,ep,steps,ret,rets,timer=null,greedy=false,dir=1;
+const $=id=>document.getElementById(id),key=(r,c)=>r+','+c;
+const isPit=(r,c)=>PITS.some(p=>p[0]==r&&p[1]==c),isGoal=(r,c)=>r==GOAL[0]&&c==GOAL[1];
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rgb=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16));
+const mix=(a,b,t)=>{a=rgb(a);b=rgb(b);return 'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')'};
+function newEp(){pos=START.slice();steps=0;ret=0;dir=1}
+function reset(){Q=Array.from({length:N*N},()=>[0,0,0,0]);ep=0;rets=[];newEp();draw();stats()}
+function best(s){const q=Q[s],m=Math.max(...q),i=[];q.forEach((v,k)=>v==m&&i.push(k));return i[Math.floor(Math.random()*i.length)]}
+function step(){
+ const s=pos[0]*N+pos[1];
+ const a=(!greedy&&Math.random()<+$('eps').value)?Math.floor(Math.random()*4):best(s);
+ let r=pos[0]+A[a][0],c=pos[1]+A[a][1];
+ if(r<0||c<0||r>=N||c>=N||walls.has(key(r,c))){r=pos[0];c=pos[1]}
+ let rew=-0.04,done=false;
+ if(isGoal(r,c)){rew=1;done=true}else if(isPit(r,c)){rew=-1;done=true}
+ if(!greedy){const al=+$('alpha').value,g=+$('gamma').value,s2=r*N+c;
+  Q[s][a]+=al*(rew+(done?0:g*Math.max(...Q[s2]))-Q[s][a])}
+ pos=[r,c];dir=a;ret+=rew;steps++;
+ if(done||steps>=100){if(!greedy){rets.push(ret);ep++}newEp()}
+}
+const cv=$('grid'),ctx=cv.getContext('2d');
+function fit(c){const d=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*d;c.height=h*d;const x=c.getContext('2d');x.setTransform(d,0,0,d,0,0);return[x,w,h]}
+function draw(){
+ const[x,S]=fit(cv),cs=S/N,lo=css('--lo'),hi=css('--hi'),ink=css('--ink');
+ let mn=0,mx=0;Q.forEach((q,i)=>{const m=Math.max(...q);mn=Math.min(mn,m);mx=Math.max(mx,m)});
+ x.textAlign='center';x.textBaseline='middle';
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+  const px=c*cs,py=r*cs,q=Q[r*N+c],m=Math.max(...q);
+  if(walls.has(key(r,c)))x.fillStyle=css('--wall');
+  else if(isGoal(r,c)||isPit(r,c))x.fillStyle=lo;
+  else x.fillStyle=mix(lo,hi,mx>mn?Math.max(0,(m-mn)/(mx-mn)):0);
+  x.fillRect(px,py,cs,cs);if(walls.has(key(r,c))){x.strokeStyle=css('--line');x.lineWidth=3;x.strokeRect(px+4,py+4,cs-8,cs-8)}
+  x.fillStyle=ink;
+  if(isGoal(r,c)){x.font=cs*.5+'px serif';x.fillText('🍒',px+cs/2,py+cs/2+2)}
+  else if(isPit(r,c))ghost(x,px+cs/2,py+cs/2,cs*.32)
+  else if(!walls.has(key(r,c))&&q.some(v=>v!=q[0])){x.font='600 '+cs*.4+'px Figtree,sans-serif';x.fillText(AR[q.indexOf(m)],px+cs/2,py+cs/2)}
+  if(r==START[0]&&c==START[1]){x.font='600 '+cs*.2+'px Figtree,sans-serif';x.fillStyle=css('--mute');x.fillText('start',px+cs/2,py+cs*.86)}
+ }
+ x.strokeStyle=css('--line');x.lineWidth=1;
+ for(let i=0;i<=N;i++){x.beginPath();x.moveTo(i*cs,0);x.lineTo(i*cs,S);x.moveTo(0,i*cs);x.lineTo(S,i*cs);x.stroke()}
+ {const cx=pos[1]*cs+cs/2,cy=pos[0]*cs+cs/2,R=cs*.32,d=[-Math.PI/2,0,Math.PI/2,Math.PI][dir],m=steps%2?.75:.15;x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,R,d+m,d+2*Math.PI-m);x.closePath();x.fillStyle=css('--teal');x.fill()}
+ chart();
+}
+function ghost(x,cx,cy,R){x.fillStyle=css('--coral');x.beginPath();x.arc(cx,cy-R*.1,R,Math.PI,0);x.lineTo(cx+R,cy+R);for(let i=0;i<3;i++){x.lineTo(cx+R-(i*2+1)*R/3,cy+R*.6);x.lineTo(cx+R-(i*2+2)*R/3,cy+R)}x.closePath();x.fill();x.fillStyle='#fff';[-1,1].forEach(k=>{x.beginPath();x.arc(cx+k*R*.38,cy-R*.15,R*.24,0,7);x.fill()});x.fillStyle='#2121ff';[-1,1].forEach(k=>{x.beginPath();x.arc(cx+k*R*.38+R*.08,cy-R*.15,R*.1,0,7);x.fill()})}
+function chart(){
+ const c=$('chart'),[x,w,h]=fit(c),pts=[];
+ for(let i=0;i<rets.length;i++){const sl=rets.slice(Math.max(0,i-9),i+1);pts.push(sl.reduce((a,b)=>a+b,0)/sl.length)}
+ x.strokeStyle=css('--line');x.beginPath();x.moveTo(0,h/2);x.lineTo(w,h/2);x.stroke();
+ if(pts.length<2)return;
+ const v=pts.slice(-150);x.strokeStyle=css('--teal');x.lineWidth=2;x.beginPath();
+ v.forEach((p,i)=>{const px=i/(v.length-1)*w,py=h-6-(p+1)/2*(h-12);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();
+}
+function stats(){
+ $('sEp').textContent=ep;$('sSt').textContent=steps;
+ const l=rets.slice(-20);$('sAvg').textContent=l.length?(l.reduce((a,b)=>a+b,0)/l.length).toFixed(2):'–';
+ ['alpha:aV','gamma:gV','eps:eV','speed:spV'].forEach(p=>{const[a,b]=p.split(':');$(b).textContent=$(a).value});
+}
+function tick(){const s=+$('speed').value,k=s>10?s-9:1;for(let i=0;i<k;i++)step();draw();stats()}
+function go(on){
+ if(timer){clearInterval(timer);timer=null}
+ if(on){const s=+$('speed').value;timer=setInterval(tick,Math.max(60,600/s))}
+ $('run').textContent=timer&&!greedy?'Pause':'Train';
+ $('watch').classList.toggle('on',!!timer&&greedy);
+}
+$('run').onclick=()=>{greedy=false;newEp();go(!(timer&&!greedy))};
+$('watch').onclick=()=>{const was=timer&&greedy;greedy=true;newEp();go(!was);if(was)greedy=false};
+$('fast').onclick=()=>{go(false);greedy=false;const t=ep+100;let g=0;while(ep<t&&g++<300000)step();newEp();draw();stats()};
+$('reset').onclick=()=>{go(false);greedy=false;reset()};
+['alpha','gamma','eps','speed'].forEach(i=>$(i).oninput=stats);
+$('speed').addEventListener('input',()=>{if(timer)go(true)});
+cv.onclick=e=>{
+ const b=cv.getBoundingClientRect(),c=Math.floor((e.clientX-b.left)/b.width*N),r=Math.floor((e.clientY-b.top)/b.height*N);
+ if((r==START[0]&&c==START[1])||isGoal(r,c)||isPit(r,c))return;
+ const k=key(r,c);walls.has(k)?walls.delete(k):walls.add(k);go(false);greedy=false;reset();
+};
+addEventListener('resize',draw);
+reset();
+</script></body></html>

@@ -1,2 +1,2 @@
-# pac-learn-wajdi
-Reinforcement Learning Demo
+# Pac-Learn
+Pac-Man style Q-learning demo. Static site, no build step. Deploy with: vercel --prod
